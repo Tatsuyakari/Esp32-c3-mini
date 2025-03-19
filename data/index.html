@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 WiFi Manager</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ESP32 WiFi Manager</h1>
+      <div id="status-bar">
+        <div id="connection-status">Đang tải...</div>
+      </div>
+    </header>
+
+    <main>
+      <section class="card" id="wifi-scan">
+        <h2>Quét mạng WiFi</h2>
+        <button id="scan-btn" class="btn primary">Quét WiFi</button>
+        <div id="network-list" class="network-container"></div>
+      </section>
+
+      <section class="card" id="wifi-connect">
+        <h2>Kết nối WiFi</h2>
+        <form id="connect-form">
+          <div class="form-group">
+            <label for="ssid">SSID:</label>
+            <input type="text" name="ssid" id="ssid" placeholder="Tên mạng WiFi" required>
+          </div>
+          <div class="form-group">
+            <label for="pass">Password:</label>
+            <input type="password" name="pass" id="pass" placeholder="Mật khẩu WiFi">
+          </div>
+          <button type="submit" class="btn primary">Kết nối</button>
+        </form>
+      </section>
+
+      <section class="card" id="wifi-info">
+        <h2>Thông tin kết nối</h2>
+        <div id="connection-info">
+          <p>Chế độ AP: <span id="ap-info">Đang tải...</span></p>
+          <p>Kết nối WiFi: <span id="wifi-info">Chưa kết nối</span></p>
+        </div>
+        <button id="disconnect-btn" class="btn danger" style="display: none;">Ngắt kết nối</button>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; 2025 ESP32 WiFi Manager</p>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  
+  <script src="/js/script.js"></script>
+</body>
+</html>
