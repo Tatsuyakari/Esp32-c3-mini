@@ -3,20 +3,62 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 WiFi Manager</title>
+  <title>ESP32 WiFi & ESP-NOW Manager</title>
+  <style>
+    .mode-note {
+      font-size: 0.9em;
+      font-style: italic;
+      color: #666;
+      margin-top: 5px;
+    }
+    .device-status {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .device-online {
+      background-color: #4caf50;
+    }
+    .device-offline {
+      background-color: #f44336;
+    }
+  </style>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>ESP32 WiFi Manager</h1>
+      <h1>ESP32 WiFi & ESP-NOW Manager</h1>
       <div id="status-bar">
         <div id="connection-status">Đang tải...</div>
       </div>
     </header>
 
     <main>
+      <section class="card" id="espnow-mode">
+        <h2>Chế độ ESP-NOW</h2>
+        <div class="form-group">
+          <label>Chế độ hiện tại: <span id="espnow-mode-display">Đang tải...</span></label>
+          <p class="mode-note">Chế độ được quy định bằng mã nguồn khi biên dịch và nạp.</p>
+          <p>Tên mạng WiFi: <strong><span id="ap-ssid-display">Đang tải...</span></strong></p>
+        </div>
+      </section>
+
+      <section class="card" id="espnow-manager" style="display: none;">
+        <h2>ESP-NOW Manager</h2>
+        <div id="master-controls" style="display: none;">
+          <button id="scan-espnow-btn" class="btn primary">Quét thiết bị ESP-NOW</button>
+          <div id="espnow-device-list" class="network-container"></div>
+        </div>
+        <div id="slave-info" style="display: none;">
+          <p>Thiết bị đang ở chế độ Slave, sẵn sàng nhận kết nối từ Master</p>
+          <p>Địa chỉ MAC: <span id="device-mac">Đang tải...</span></p>
+        </div>
+      </section>
+
       <section class="card" id="wifi-scan">
         <h2>Quét mạng WiFi</h2>
         <button id="scan-btn" class="btn primary">Quét WiFi</button>
@@ -49,7 +91,7 @@
     </main>
 
     <footer>
-      <p>&copy; 2025 ESP32 WiFi Manager</p>
+      <p>&copy; 2025 ESP32 WiFi & ESP-NOW Manager</p>
     </footer>
   </div>
 
