@@ -20,9 +20,17 @@ document.addEventListener('DOMContentLoaded', function() {
   const deviceMac = document.getElementById('device-mac');
   const apSsidDisplay = document.getElementById('ap-ssid-display');
   
+  // Slave LED elements
+  const slaveLedIndicator = document.getElementById('slave-led-indicator');
+  const slaveLedStatus = document.getElementById('slave-led-status');
+  const toggleSlaveLedBtn = document.getElementById('toggle-slave-led');
+  const connectionNote = document.getElementById('connection-note');
+  
   // Biến lưu trạng thái
   let isMaster = true;
   let espnowActive = false;
+  let slaveLedState = false;
+  let slaveConnectedToMaster = false;
   
   // Fetch initial status
   fetchStatus();
@@ -32,31 +40,51 @@ document.addEventListener('DOMContentLoaded', function() {
   connectForm.addEventListener('submit', connectToWifi);
   disconnectBtn.addEventListener('click', disconnectWifi);
   scanEspnowBtn && scanEspnowBtn.addEventListener('click', scanEspnowDevices);
+  toggleSlaveLedBtn && toggleSlaveLedBtn.addEventListener('click', toggleSlaveLed);
+  
+  // Thiết lập sự kiện cho các nút động
+  document.addEventListener('click', function(e) {
+    // Xử lý nút kết nối ESP-NOW
+    if (e.target.closest('.connect-btn')) {
+      const btn = e.target.closest('.connect-btn');
+      const mac = btn.getAttribute('data-mac');
+      if (mac) connectToEspnowDevice(mac);
+    }
+    
+    // Xử lý nút toggle LED
+    if (e.target.closest('.toggle-btn')) {
+      const btn = e.target.closest('.toggle-btn');
+      const mac = btn.getAttribute('data-mac');
+      if (mac) toggleLed(mac);
+    }
+  });
   
   // Functions
   function fetchStatus() {
     fetch('/api/status')
       .then(response => response.json())
       .then(data => {
+        // Update connection status
+        connectionStatus.innerHTML = data.wifi_connected ? 
+          '<i class="fas fa-check-circle"></i> Đã kết nối' : 
+          '<i class="fas fa-times-circle"></i> Chưa kết nối';
+        
         // Update AP info
         apInfo.textContent = `${data.ap_ssid} (${data.ap_ip})`;
+        
         // Hiển thị SSID ở phần chế độ ESP-NOW
         if (apSsidDisplay) {
           apSsidDisplay.textContent = data.ap_ssid;
           // Thêm màu sắc phù hợp theo chế độ
-          apSsidDisplay.style.color = data.is_master ? '#1976d2' : '#f44336';
+          apSsidDisplay.style.color = data.is_master ? 'var(--primary-color)' : 'var(--secondary-color)';
         }
         
         // Update WiFi connection info
         if (data.wifi_connected) {
-          connectionStatus.textContent = 'Đã kết nối';
-          connectionStatus.style.color = '#4caf50';
-          wifiInfo.textContent = `${data.wifi_ssid} (${data.wifi_ip})`;
-          disconnectBtn.style.display = 'block';
+          wifiInfo.innerHTML = `<span style="color: var(--success-color);">${data.wifi_ssid}</span> (${data.wifi_ip})`;
+          disconnectBtn.style.display = 'inline-block';
         } else {
-          connectionStatus.textContent = 'Chưa kết nối';
-          connectionStatus.style.color = '#f44336';
-          wifiInfo.textContent = 'Chưa kết nối';
+          wifiInfo.innerHTML = '<span style="color: var(--danger-color);">Chưa kết nối</span>';
           disconnectBtn.style.display = 'none';
         }
         
@@ -65,7 +93,9 @@ document.addEventListener('DOMContentLoaded', function() {
         espnowActive = data.espnow_active;
         
         // Update ESP-NOW mode display
-        espnowModeDisplay.textContent = isMaster ? 'Master' : 'Slave';
+        espnowModeDisplay.innerHTML = isMaster ? 
+          '<span style="color: var(--primary-color);">Master</span>' : 
+          '<span style="color: var(--secondary-color);">Slave</span>';
         
         // Show/hide relevant ESP-NOW controls
         if (espnowActive) {
@@ -73,21 +103,34 @@ document.addEventListener('DOMContentLoaded', function() {
           if (isMaster) {
             masterControls.style.display = 'block';
             slaveInfo.style.display = 'none';
+            fetchEspnowDevices(); // Tự động tải danh sách thiết bị
           } else {
             masterControls.style.display = 'none';
             slaveInfo.style.display = 'block';
-            // Get MAC address for slave mode display
+            
+            // Get MAC address and LED state for slave mode display
             fetch('/api/espnow/list')
               .then(response => response.json())
               .then(data => {
                 if (data.devices && data.devices.length > 0) {
                   deviceMac.textContent = data.devices[0].mac;
+                  
+                  // Update LED state for slave
+                  slaveLedState = data.devices[0].ledState;
+                  slaveConnectedToMaster = data.devices[0].connected;
+                  updateSlaveLedDisplay();
                 } else {
                   deviceMac.textContent = 'Không có sẵn';
+                  slaveLedState = false;
+                  slaveConnectedToMaster = false;
+                  updateSlaveLedDisplay();
                 }
               })
               .catch(error => {
                 deviceMac.textContent = 'Không có sẵn';
+                slaveLedState = false;
+                slaveConnectedToMaster = false;
+                updateSlaveLedDisplay();
               });
           }
         } else {
@@ -99,10 +142,67 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
   
+  function updateSlaveLedDisplay() {
+    if (!slaveLedIndicator || !slaveLedStatus) return;
+    
+    if (!slaveConnectedToMaster) {
+      // Khi chưa kết nối với master, LED nhấp nháy
+      slaveLedIndicator.className = 'led-indicator led-blink';
+      slaveLedStatus.textContent = 'Đang nhấp nháy (Chưa kết nối với Master)';
+      connectionNote.style.display = 'block';
+      toggleSlaveLedBtn.disabled = true;
+    } else {
+      // Khi đã kết nối, hiển thị trạng thái LED
+      connectionNote.style.display = 'none';
+      toggleSlaveLedBtn.disabled = false;
+      
+      if (slaveLedState) {
+        slaveLedIndicator.className = 'led-indicator led-on';
+        slaveLedStatus.textContent = 'BẬT';
+        toggleSlaveLedBtn.innerHTML = '<i class="fas fa-power-off"></i> Tắt LED';
+        toggleSlaveLedBtn.className = 'btn success';
+      } else {
+        slaveLedIndicator.className = 'led-indicator led-off';
+        slaveLedStatus.textContent = 'TẮT';
+        toggleSlaveLedBtn.innerHTML = '<i class="fas fa-lightbulb"></i> Bật LED';
+        toggleSlaveLedBtn.className = 'btn primary';
+      }
+    }
+  }
+  
+  function toggleSlaveLed() {
+    if (isMaster) return; // Chỉ slave mới có thể tự điều khiển LED
+    
+    // Hiệu ứng nút nhấn
+    toggleSlaveLedBtn.disabled = true;
+    toggleSlaveLedBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Đang xử lý...';
+    
+    // Gửi yêu cầu toggle LED
+    fetch('/api/espnow/slave/toggle', {
+      method: 'POST',
+      body: new FormData()
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          slaveLedState = !slaveLedState; // Đảo trạng thái
+          updateSlaveLedDisplay();
+          showToast('Đã ' + (slaveLedState ? 'BẬT' : 'TẮT') + ' LED');
+        } else {
+          showToast('Lỗi: ' + data.message);
+        }
+        toggleSlaveLedBtn.disabled = false;
+      })
+      .catch(error => {
+        showToast('Lỗi: ' + error.message);
+        toggleSlaveLedBtn.disabled = false;
+      });
+  }
+  
   function scanNetworks() {
     scanBtn.disabled = true;
-    scanBtn.textContent = 'Đang quét...';
-    networkList.innerHTML = '<p>Đang tìm kiếm mạng WiFi...</p>';
+    scanBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Đang quét...';
+    networkList.innerHTML = '<div class="network-item" style="text-align: center;"><i class="fas fa-circle-notch fa-spin"></i> Đang tìm kiếm mạng WiFi...</div>';
     
     fetch('/api/scan')
       .then(response => response.json())
@@ -111,59 +211,46 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (data.networks && data.networks.length > 0) {
           data.networks.forEach(network => {
-            const networkItem = document.createElement('div');
-            networkItem.className = 'network-item';
-            networkItem.addEventListener('click', () => {
+            const item = createNetworkItem(network);
+            item.addEventListener('click', () => {
               ssidInput.value = network.ssid;
               passInput.focus();
             });
-            
-            // Calculate signal strength (0-4)
-            const signalStrength = calculateSignalStrength(network.rssi);
-            const signalBars = '▂▄▆█'.slice(0, signalStrength);
-            
-            networkItem.innerHTML = `
-              <div class="network-icon">${network.secure ? '🔒' : '🔓'}</div>
-              <div class="network-details">
-                <div class="network-name">${network.ssid}</div>
-                <div class="network-info">${network.secure ? 'Bảo mật' : 'Mở'}</div>
-              </div>
-              <div class="signal-strength">
-                <span class="signal-bars">${signalBars}</span>
-                <span>${network.rssi} dBm</span>
-              </div>
-            `;
-            
-            networkList.appendChild(networkItem);
+            networkList.appendChild(item);
           });
         } else {
-          networkList.innerHTML = '<p>Không tìm thấy mạng WiFi nào</p>';
+          networkList.innerHTML = '<div class="network-item" style="text-align: center; color: #666;"><i class="fas fa-exclamation-circle"></i> Không tìm thấy mạng WiFi nào</div>';
         }
+        
+        scanBtn.disabled = false;
+        scanBtn.innerHTML = '<i class="fas fa-search"></i> Quét WiFi';
       })
       .catch(error => {
-        networkList.innerHTML = '<p>Lỗi khi quét: ' + error.message + '</p>';
-      })
-      .finally(() => {
+        networkList.innerHTML = '<div class="network-item" style="text-align: center; color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Lỗi: ' + error.message + '</div>';
         scanBtn.disabled = false;
-        scanBtn.textContent = 'Quét WiFi';
+        scanBtn.innerHTML = '<i class="fas fa-search"></i> Quét WiFi';
+        showToast('Lỗi: ' + error.message);
       });
   }
   
   function connectToWifi(event) {
     event.preventDefault();
     
-    const formData = new FormData(connectForm);
-    const ssid = formData.get('ssid');
-    const pass = formData.get('pass');
+    const ssid = ssidInput.value.trim();
+    const pass = passInput.value;
     
     if (!ssid) {
-      showToast('Vui lòng nhập SSID');
+      showToast('Vui lòng nhập tên mạng WiFi');
       return;
     }
     
     const submitBtn = connectForm.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Đang kết nối...';
+    submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Đang kết nối...';
+    
+    const formData = new FormData();
+    formData.append('ssid', ssid);
+    formData.append('pass', pass);
     
     fetch('/api/connect', {
       method: 'POST',
@@ -172,74 +259,78 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          showToast('Kết nối thành công!');
-          fetchStatus();
+          showToast('Đang kết nối đến ' + ssid);
+          setTimeout(fetchStatus, 5000); // Kiểm tra trạng thái sau 5 giây
         } else {
-          showToast('Kết nối thất bại: ' + data.message);
+          showToast('Lỗi: ' + data.message);
         }
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kết nối';
       })
       .catch(error => {
         showToast('Lỗi: ' + error.message);
-      })
-      .finally(() => {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Kết nối';
+        submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kết nối';
       });
   }
   
   function disconnectWifi() {
     disconnectBtn.disabled = true;
-    disconnectBtn.textContent = 'Đang ngắt kết nối...';
+    disconnectBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Đang ngắt kết nối...';
     
-    fetch('/api/disconnect')
+    fetch('/api/disconnect', {
+      method: 'POST',
+      body: new FormData()
+    })
       .then(response => response.json())
       .then(data => {
         if (data.success) {
           showToast('Đã ngắt kết nối WiFi');
-          fetchStatus();
+          setTimeout(fetchStatus, 2000); // Kiểm tra trạng thái sau 2 giây
         } else {
-          showToast(data.message);
+          showToast('Lỗi: ' + data.message);
         }
+        disconnectBtn.disabled = false;
+        disconnectBtn.innerHTML = '<i class="fas fa-unlink"></i> Ngắt kết nối';
       })
       .catch(error => {
         showToast('Lỗi: ' + error.message);
-      })
-      .finally(() => {
         disconnectBtn.disabled = false;
-        disconnectBtn.textContent = 'Ngắt kết nối';
+        disconnectBtn.innerHTML = '<i class="fas fa-unlink"></i> Ngắt kết nối';
       });
   }
   
-  // Chức năng chuyển đổi chế độ đã bị loại bỏ vì chế độ được xác định khi biên dịch
-  
   function scanEspnowDevices() {
-    // Kiểm tra nếu scanEspnowBtn không tồn tại (trường hợp thiết bị slave)
-    if (!scanEspnowBtn) return;
+    if (!isMaster || !espnowActive) return;
     
     scanEspnowBtn.disabled = true;
-    scanEspnowBtn.textContent = 'Đang quét...';
-    espnowDeviceList.innerHTML = '<p>Đang tìm kiếm thiết bị ESP-NOW...</p>';
+    scanEspnowBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Đang quét...';
     
-    fetch('/api/espnow/scan')
+    fetch('/api/espnow/scan', {
+      method: 'POST',
+      body: new FormData()
+    })
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          // Wait 5 seconds to give ESP devices time to respond
-          setTimeout(fetchEspnowDevices, 5000);
+          showToast('Đang quét thiết bị ESP-NOW');
+          setTimeout(fetchEspnowDevices, 2000); // Tải danh sách sau 2 giây
         } else {
-          espnowDeviceList.innerHTML = '<p>Lỗi: ' + data.message + '</p>';
-          scanEspnowBtn.disabled = false;
-          scanEspnowBtn.textContent = 'Quét thiết bị ESP-NOW';
+          showToast('Lỗi: ' + data.message);
         }
+        scanEspnowBtn.disabled = false;
+        scanEspnowBtn.innerHTML = '<i class="fas fa-search"></i> Quét thiết bị ESP-NOW';
       })
       .catch(error => {
-        espnowDeviceList.innerHTML = '<p>Lỗi khi quét: ' + error.message + '</p>';
+        showToast('Lỗi: ' + error.message);
         scanEspnowBtn.disabled = false;
-        scanEspnowBtn.textContent = 'Quét thiết bị ESP-NOW';
+        scanEspnowBtn.innerHTML = '<i class="fas fa-search"></i> Quét thiết bị ESP-NOW';
       });
   }
   
   function fetchEspnowDevices() {
+    if (!isMaster || !espnowActive) return;
+    
     fetch('/api/espnow/list')
       .then(response => response.json())
       .then(data => {
@@ -247,60 +338,21 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (data.devices && data.devices.length > 0) {
           data.devices.forEach(device => {
-            const deviceItem = document.createElement('div');
-            deviceItem.className = 'network-item';
-            
-            // Calculate signal strength (0-4)
-            const signalStrength = calculateSignalStrength(device.rssi);
-            const signalBars = '▂▄▆█'.slice(0, signalStrength);
-            
-            deviceItem.innerHTML = `
-              <div class="network-icon">${device.connected ? '🔌' : '📡'}</div>
-              <div class="network-details">
-                <div class="network-name">${device.name}</div>
-                <div class="network-info">${device.mac}</div>
-              </div>
-              <div class="signal-strength">
-                <span class="signal-bars">${signalBars}</span>
-                <span>${device.rssi} dBm</span>
-              </div>
-            `;
-            
-            if (!device.connected) {
-              // Add connect button
-              const connectBtn = document.createElement('button');
-              connectBtn.className = 'btn primary';
-              connectBtn.style.marginLeft = '10px';
-              connectBtn.textContent = 'Kết nối';
-              connectBtn.addEventListener('click', () => connectToEspnowDevice(device.mac));
-              deviceItem.appendChild(connectBtn);
-            } else {
-              // Add toggle LED button
-              const toggleBtn = document.createElement('button');
-              toggleBtn.className = 'btn ' + (device.ledState ? 'success' : 'secondary');
-              toggleBtn.style.marginLeft = '10px';
-              toggleBtn.textContent = device.ledState ? 'Tắt LED' : 'Bật LED';
-              toggleBtn.addEventListener('click', () => toggleLed(device.mac, !device.ledState));
-              deviceItem.appendChild(toggleBtn);
-            }
-            
-            espnowDeviceList.appendChild(deviceItem);
+            const item = createDeviceItem(device);
+            espnowDeviceList.appendChild(item);
           });
         } else {
-          espnowDeviceList.innerHTML = '<p>Không tìm thấy thiết bị ESP-NOW nào</p>';
+          espnowDeviceList.innerHTML = '<div class="network-item" style="text-align: center; color: #666;"><i class="fas fa-info-circle"></i> Chưa có thiết bị nào. Nhấn nút Quét để tìm thiết bị.</div>';
         }
-        
-        scanEspnowBtn.disabled = false;
-        scanEspnowBtn.textContent = 'Quét thiết bị ESP-NOW';
       })
       .catch(error => {
-        espnowDeviceList.innerHTML = '<p>Lỗi khi lấy danh sách: ' + error.message + '</p>';
-        scanEspnowBtn.disabled = false;
-        scanEspnowBtn.textContent = 'Quét thiết bị ESP-NOW';
+        espnowDeviceList.innerHTML = '<div class="network-item" style="text-align: center; color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Lỗi: ' + error.message + '</div>';
       });
   }
   
   function connectToEspnowDevice(mac) {
+    if (!isMaster || !espnowActive) return;
+    
     const formData = new FormData();
     formData.append('mac', mac);
     
@@ -310,10 +362,11 @@ document.addEventListener('DOMContentLoaded', function() {
     })
       .then(response => response.json())
       .then(data => {
-        showToast(data.message);
         if (data.success) {
-          // Refresh device list after successful connection
-          setTimeout(fetchEspnowDevices, 500);
+          showToast('Đã kết nối với thiết bị');
+          setTimeout(fetchEspnowDevices, 1000); // Tải lại danh sách sau 1 giây
+        } else {
+          showToast('Lỗi: ' + data.message);
         }
       })
       .catch(error => {
@@ -321,10 +374,11 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
   
-  function toggleLed(mac, state) {
+  function toggleLed(mac) {
+    if (!isMaster || !espnowActive) return;
+    
     const formData = new FormData();
     formData.append('mac', mac);
-    formData.append('state', state ? '1' : '0');
     
     fetch('/api/espnow/toggle', {
       method: 'POST',
@@ -332,15 +386,90 @@ document.addEventListener('DOMContentLoaded', function() {
     })
       .then(response => response.json())
       .then(data => {
-        showToast(data.message);
         if (data.success) {
-          // Refresh device list after toggling LED
-          setTimeout(fetchEspnowDevices, 500);
+          showToast('Đã gửi lệnh toggle LED');
+          setTimeout(fetchEspnowDevices, 1000); // Tải lại danh sách sau 1 giây
+        } else {
+          showToast('Lỗi: ' + data.message);
         }
       })
       .catch(error => {
         showToast('Lỗi: ' + error.message);
       });
+  }
+  
+  // Auto-refresh status
+  setInterval(fetchStatus, 10000); // Cập nhật trạng thái mỗi 10 giây
+  
+  // Auto-refresh ESP-NOW device list when in Master mode
+  setInterval(() => {
+    if (isMaster && espnowActive) {
+      fetchEspnowDevices();
+    }
+  }, 5000); // Cập nhật danh sách thiết bị mỗi 5 giây
+  
+  function createNetworkItem(network) {
+    const item = document.createElement('div');
+    item.className = 'network-item';
+    
+    // Calculate signal strength (0-4)
+    const signalStrength = calculateSignalStrength(network.rssi);
+    const signalBars = '▂▄▆█'.slice(0, signalStrength);
+    
+    item.innerHTML = `
+      <div class="network-icon">${network.secure ? '<i class="fas fa-lock"></i>' : '<i class="fas fa-unlock"></i>'}</div>
+      <div class="network-details">
+        <div class="network-name">${network.ssid}</div>
+        <div class="network-info">${network.secure ? 'Bảo mật' : 'Mở'}</div>
+      </div>
+      <div class="signal-strength">
+        <span class="signal-bars">${signalBars}</span>
+        <span>${network.rssi} dBm</span>
+      </div>
+    `;
+    
+    return item;
+  }
+  
+  function createDeviceItem(device) {
+    const item = document.createElement('div');
+    item.className = 'network-item';
+    
+    // Calculate signal strength (0-4)
+    const signalStrength = calculateSignalStrength(device.rssi);
+    const signalBars = '▂▄▆█'.slice(0, signalStrength);
+    
+    item.innerHTML = `
+      <div class="network-icon">${device.connected ? '<i class="fas fa-plug"></i>' : '<i class="fas fa-unlink"></i>'}</div>
+      <div class="network-details">
+        <div class="network-name">${device.name}</div>
+        <div class="network-info">${device.mac}</div>
+      </div>
+      <div class="signal-strength">
+        <span class="signal-bars">${signalBars}</span>
+        <span>${device.rssi} dBm</span>
+      </div>
+    `;
+    
+    if (!device.connected) {
+      // Add connect button
+      const connectBtn = document.createElement('button');
+      connectBtn.className = 'btn primary connect-btn';
+      connectBtn.style.marginLeft = '10px';
+      connectBtn.textContent = 'Kết nối';
+      connectBtn.setAttribute('data-mac', device.mac);
+      item.appendChild(connectBtn);
+    } else {
+      // Add toggle LED button
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'btn ' + (device.ledState ? 'success' : 'secondary') + ' toggle-btn';
+      toggleBtn.style.marginLeft = '10px';
+      toggleBtn.textContent = device.ledState ? 'Tắt LED' : 'Bật LED';
+      toggleBtn.setAttribute('data-mac', device.mac);
+      item.appendChild(toggleBtn);
+    }
+    
+    return item;
   }
   
   function calculateSignalStrength(rssi) {
@@ -361,11 +490,4 @@ document.addEventListener('DOMContentLoaded', function() {
       toast.classList.remove('show');
     }, 3000);
   }
-  
-  // Auto-refresh ESP-NOW device list when in Master mode
-  setInterval(() => {
-    if (isMaster && espnowActive) {
-      fetchEspnowDevices();
-    }
-  }, 5000); // Refresh every 5 seconds để phát hiện thiết bị slave nhanh hơn
 });

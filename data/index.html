@@ -4,27 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ESP32 WiFi & ESP-NOW Manager</title>
-  <style>
-    .mode-note {
-      font-size: 0.9em;
-      font-style: italic;
-      color: #666;
-      margin-top: 5px;
-    }
-    .device-status {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      margin-right: 5px;
-    }
-    .device-online {
-      background-color: #4caf50;
-    }
-    .device-offline {
-      background-color: #f44336;
-    }
-  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
 </head>
@@ -33,13 +13,15 @@
     <header>
       <h1>ESP32 WiFi & ESP-NOW Manager</h1>
       <div id="status-bar">
-        <div id="connection-status">Đang tải...</div>
+        <div id="connection-status">
+          <i class="fas fa-circle-notch fa-spin"></i> Đang tải thông tin hệ thống...
+        </div>
       </div>
     </header>
 
     <main>
       <section class="card" id="espnow-mode">
-        <h2>Chế độ ESP-NOW</h2>
+        <h2><i class="fas fa-microchip"></i> Chế độ ESP-NOW</h2>
         <div class="form-group">
           <label>Chế độ hiện tại: <span id="espnow-mode-display">Đang tải...</span></label>
           <p class="mode-note">Chế độ được quy định bằng mã nguồn khi biên dịch và nạp.</p>
@@ -48,55 +30,196 @@
       </section>
 
       <section class="card" id="espnow-manager" style="display: none;">
-        <h2>ESP-NOW Manager</h2>
+        <h2><i class="fas fa-broadcast-tower"></i> ESP-NOW Manager</h2>
         <div id="master-controls" style="display: none;">
-          <button id="scan-espnow-btn" class="btn primary">Quét thiết bị ESP-NOW</button>
-          <div id="espnow-device-list" class="network-container"></div>
+          <button id="scan-espnow-btn" class="btn primary">
+            <i class="fas fa-search"></i> Quét thiết bị ESP-NOW
+          </button>
+          <div id="espnow-device-list" class="network-container">
+            <div class="network-item" style="text-align: center; color: #666;">
+              <i class="fas fa-info-circle"></i> Chưa có thiết bị nào. Nhấn nút Quét để tìm thiết bị.
+            </div>
+          </div>
         </div>
         <div id="slave-info" style="display: none;">
-          <p>Thiết bị đang ở chế độ Slave, sẵn sàng nhận kết nối từ Master</p>
-          <p>Địa chỉ MAC: <span id="device-mac">Đang tải...</span></p>
+          <div class="led-control-panel">
+            <h3><i class="fas fa-info-circle"></i> Thông tin thiết bị</h3>
+            <p>Thiết bị đang ở chế độ Slave, sẵn sàng nhận kết nối từ Master</p>
+            <p>Địa chỉ MAC: <span id="device-mac">Đang tải...</span></p>
+            <p>
+              <span class="led-indicator" id="slave-led-indicator"></span>
+              Trạng thái LED: <span id="slave-led-status">Đang tải...</span>
+            </p>
+            <button id="toggle-slave-led" class="btn primary">
+              <i class="fas fa-lightbulb"></i> Bật/Tắt LED
+            </button>
+            <p class="mode-note" id="connection-note">Khi chưa kết nối với Master, LED sẽ nhấp nháy</p>
+          </div>
         </div>
       </section>
 
       <section class="card" id="wifi-scan">
-        <h2>Quét mạng WiFi</h2>
-        <button id="scan-btn" class="btn primary">Quét WiFi</button>
-        <div id="network-list" class="network-container"></div>
+        <h2><i class="fas fa-wifi"></i> Quét mạng WiFi</h2>
+        <button id="scan-btn" class="btn primary">
+          <i class="fas fa-search"></i> Quét WiFi
+        </button>
+        <div id="network-list" class="network-container">
+          <div class="network-item" style="text-align: center; color: #666;">
+            <i class="fas fa-info-circle"></i> Chưa có mạng nào. Nhấn nút Quét WiFi để tìm mạng.
+          </div>
+        </div>
       </section>
 
       <section class="card" id="wifi-connect">
-        <h2>Kết nối WiFi</h2>
+        <h2><i class="fas fa-plug"></i> Kết nối WiFi</h2>
         <form id="connect-form">
           <div class="form-group">
-            <label for="ssid">SSID:</label>
+            <label for="ssid"><i class="fas fa-network-wired"></i> SSID:</label>
             <input type="text" name="ssid" id="ssid" placeholder="Tên mạng WiFi" required>
           </div>
           <div class="form-group">
-            <label for="pass">Password:</label>
+            <label for="pass"><i class="fas fa-key"></i> Password:</label>
             <input type="password" name="pass" id="pass" placeholder="Mật khẩu WiFi">
           </div>
-          <button type="submit" class="btn primary">Kết nối</button>
+          <button type="submit" class="btn primary">
+            <i class="fas fa-sign-in-alt"></i> Kết nối
+          </button>
         </form>
       </section>
 
       <section class="card" id="wifi-info">
-        <h2>Thông tin kết nối</h2>
+        <h2><i class="fas fa-info-circle"></i> Thông tin kết nối</h2>
         <div id="connection-info">
-          <p>Chế độ AP: <span id="ap-info">Đang tải...</span></p>
-          <p>Kết nối WiFi: <span id="wifi-info">Chưa kết nối</span></p>
+          <p><i class="fas fa-broadcast-tower"></i> Chế độ AP: <span id="ap-info">Đang tải...</span></p>
+          <p><i class="fas fa-wifi"></i> Kết nối WiFi: <span id="wifi-info">Chưa kết nối</span></p>
         </div>
-        <button id="disconnect-btn" class="btn danger" style="display: none;">Ngắt kết nối</button>
+        <button id="disconnect-btn" class="btn danger" style="display: none;">
+          <i class="fas fa-unlink"></i> Ngắt kết nối
+        </button>
       </section>
     </main>
 
     <footer>
-      <p>&copy; 2025 ESP32 WiFi & ESP-NOW Manager</p>
+      <p>&copy; 2025 ESP32 WiFi & ESP-NOW Manager | <i class="fas fa-code"></i> with <i class="fas fa-heart" style="color: var(--danger-color);"></i></p>
     </footer>
   </div>
 
   <div id="toast" class="toast"></div>
   
+  <script>
+    // Hàm hiển thị thông báo toast
+    function showToast(message, duration = 3000) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, duration);
+    }
+
+    // Hàm cập nhật trạng thái LED
+    function updateLedStatus(isOn) {
+      const ledIndicator = document.getElementById('slave-led-indicator');
+      const ledStatus = document.getElementById('slave-led-status');
+      
+      if (ledIndicator) {
+        ledIndicator.className = 'led-indicator';
+        ledIndicator.classList.add(isOn ? 'led-on' : 'led-off');
+      }
+      
+      if (ledStatus) {
+        ledStatus.textContent = isOn ? 'BẬT' : 'TẮT';
+      }
+    }
+
+    // Hàm cập nhật trạng thái kết nối
+    function updateConnectionStatus(isConnected) {
+      const connectionNote = document.getElementById('connection-note');
+      const ledIndicator = document.getElementById('slave-led-indicator');
+      
+      if (connectionNote) {
+        connectionNote.textContent = isConnected ? 
+          'Đã kết nối với Master' : 
+          'Khi chưa kết nối với Master, LED sẽ nhấp nháy';
+      }
+      
+      if (ledIndicator && !isConnected) {
+        ledIndicator.className = 'led-indicator led-blink';
+      }
+    }
+
+    // Hàm tạo mục thiết bị ESP-NOW
+    function createDeviceItem(device) {
+      const item = document.createElement('div');
+      item.className = 'network-item';
+      
+      const isConnected = device.connected;
+      const statusClass = isConnected ? 'device-online' : 'device-offline';
+      
+      item.innerHTML = `
+        <div class="network-icon">
+          <i class="fas fa-microchip"></i>
+        </div>
+        <div class="network-details">
+          <div class="network-name">
+            <span class="device-status ${statusClass}"></span>
+            ${device.name}
+          </div>
+          <div class="network-info">
+            MAC: ${device.mac} | RSSI: ${device.rssi} dBm
+          </div>
+        </div>
+        <div class="signal-strength">
+          <button class="btn ${isConnected ? 'success' : 'primary'} connect-btn" 
+                  data-mac="${device.mac}" style="margin: 0; padding: 5px 10px; min-width: auto;">
+            <i class="fas ${isConnected ? 'fa-link' : 'fa-plug'}"></i>
+          </button>
+          ${isConnected ? 
+            `<button class="btn secondary toggle-btn" data-mac="${device.mac}" 
+                     style="margin: 2px 0; padding: 5px 10px; min-width: auto;">
+              <i class="fas fa-lightbulb"></i>
+             </button>` : ''}
+        </div>
+      `;
+      
+      return item;
+    }
+
+    // Hàm tạo mục mạng WiFi
+    function createNetworkItem(network) {
+      const item = document.createElement('div');
+      item.className = 'network-item';
+      
+      // Tính số vạch tín hiệu dựa trên RSSI
+      let signalBars = 0;
+      if (network.rssi > -55) signalBars = 4;
+      else if (network.rssi > -65) signalBars = 3;
+      else if (network.rssi > -75) signalBars = 2;
+      else if (network.rssi > -85) signalBars = 1;
+      
+      item.innerHTML = `
+        <div class="network-icon">
+          <i class="fas fa-wifi"></i>
+        </div>
+        <div class="network-details">
+          <div class="network-name">${network.ssid}</div>
+          <div class="network-info">
+            Kênh: ${network.channel} | Bảo mật: ${network.encryption ? 'Có' : 'Không'}
+          </div>
+        </div>
+        <div class="signal-strength">
+          <div class="signal-bars">
+            <i class="fas fa-signal"></i>
+          </div>
+          ${network.rssi} dBm
+        </div>
+      `;
+      
+      return item;
+    }
+  </script>
+  <script src="/js/theme.js"></script>
   <script src="/js/script.js"></script>
 </body>
 </html>
